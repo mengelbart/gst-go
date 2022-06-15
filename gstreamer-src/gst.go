@@ -37,6 +37,7 @@ type Pipeline struct {
 	pipelineStr string
 	payloder    string
 	codec       string
+	closed      chan struct{}
 }
 
 func NewPipeline(codec, src string) (*Pipeline, error) {
@@ -70,11 +71,12 @@ func NewPipeline(codec, src string) (*Pipeline, error) {
 	sp := &Pipeline{
 		id:          len(pipelines),
 		pipeline:    C.gstreamer_send_create_pipeline(pipelineStrUnsafe),
+		writer:      w,
+		reader:      r,
 		pipelineStr: pipelineStr,
 		payloder:    payloader,
 		codec:       codec,
-		writer:      w,
-		reader:      r,
+		closed:      make(chan struct{}),
 	}
 	pipelines[sp.id] = sp
 	return sp, nil
@@ -176,6 +178,12 @@ func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, pipelineID C
 		return
 	}
 
+	select {
+	case <-pipeline.closed:
+		return
+	default:
+	}
+
 	bs := C.GoBytes(buffer, bufferLen)
 	n, err := io.Copy(pipeline.writer, bytes.NewReader(bs))
 	if err != nil {
@@ -188,6 +196,7 @@ func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, pipelineID C
 
 func (p *Pipeline) Close() error {
 	p.reader.Close()
+	close(p.closed)
 	p.Stop()
 	p.Destroy()
 	p.writer.Close()
