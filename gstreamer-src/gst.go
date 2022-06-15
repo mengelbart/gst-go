@@ -187,6 +187,7 @@ func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, pipelineID C
 }
 
 func (p *Pipeline) Close() error {
+	p.reader.Close()
 	p.Stop()
 	p.Destroy()
 	p.writer.Close()
