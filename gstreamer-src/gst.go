@@ -10,6 +10,7 @@ import "C"
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -40,22 +41,44 @@ type Pipeline struct {
 	closed      chan struct{}
 }
 
-func NewPipeline(codec, src string) (*Pipeline, error) {
+type Config struct {
+	mtu uint
+}
+
+type Option func(*Config) error
+
+func MTU(mtu uint) Option {
+	return func(c *Config) error {
+		c.mtu = mtu
+		return nil
+	}
+}
+
+func NewPipeline(codec, src string, opts ...Option) (*Pipeline, error) {
+	c := &Config{
+		mtu: 1200,
+	}
+	for _, o := range opts {
+		if err := o(c); err != nil {
+			return nil, err
+		}
+	}
+
 	pipelineStr := "appsink name=appsink"
 	var payloader string
 
 	switch codec {
 	case "vp8":
 		payloader = "rtpvp8pay"
-		pipelineStr = src + " ! vp8enc name=encoder error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 ! rtpvp8pay name=rtpvp8pay mtu=1200 seqnum-offset=0 ! " + pipelineStr
+		pipelineStr = src + fmt.Sprintf(" ! vp8enc name=encoder error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 ! rtpvp8pay name=rtpvp8pay mtu=%v seqnum-offset=0 ! ", c.mtu) + pipelineStr
 
 	case "vp9":
 		payloader = "rtpvp9pay"
-		pipelineStr = src + " ! vp9enc name=encoder keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 ! rtpvp9pay name=rtpvp9pay mtu=1200 seqnum-offset=0 ! " + pipelineStr
+		pipelineStr = src + fmt.Sprintf(" ! vp9enc name=encoder keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 ! rtpvp9pay name=rtpvp9pay mtu=%v seqnum-offset=0 ! ", c.mtu) + pipelineStr
 
 	case "h264":
 		payloader = "rtph264pay"
-		pipelineStr = src + " ! x264enc name=encoder pass=5 speed-preset=4 tune=4 ! rtph264pay name=rtph264pay mtu=1200 seqnum-offset=0 ! " + pipelineStr
+		pipelineStr = src + fmt.Sprintf(" ! x264enc name=encoder pass=5 speed-preset=4 tune=4 ! rtph264pay name=rtph264pay mtu=%v seqnum-offset=0 ! ", c.mtu) + pipelineStr
 
 	default:
 		return nil, ErrUnknownCodec

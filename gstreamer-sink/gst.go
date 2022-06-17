@@ -27,7 +27,18 @@ type Pipeline struct {
 	pipelineStr string
 }
 
-func NewPipeline(codecName, dst string) (*Pipeline, error) {
+type Config struct{}
+
+type Option func(*Config) error
+
+func NewPipeline(codecName, dst string, opts ...Option) (*Pipeline, error) {
+	c := &Config{}
+	for _, o := range opts {
+		if err := o(c); err != nil {
+			return nil, err
+		}
+	}
+
 	pipelineStr := "appsrc name=src ! application/x-rtp"
 
 	switch codecName {
