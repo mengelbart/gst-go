@@ -26,8 +26,12 @@ GstFlowReturn new_sample_handler(GstElement* object, gpointer user_data) {
     if (sample) {
         buffer = gst_sample_get_buffer(sample);
         if (buffer) {
+            int duration = -1;
+            if (buffer->duration != GST_CLOCK_TIME_NONE) {
+                duration = (int) buffer->duration;
+            }
             gst_buffer_extract_dup(buffer, 0, gst_buffer_get_size(buffer), &copy, &copy_size);
-            goHandlePipelineBuffer(copy, copy_size, s->pipelineId);
+            goHandlePipelineBuffer(copy, copy_size, duration, s->pipelineId);
         }
         gst_sample_unref(sample);
     }
@@ -50,7 +54,7 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer user_data) {
         gst_message_parse_error(msg, &error, &debug);
         goHandleBusCall(s->pipelineId, 1, error->message);
         g_free(debug);
-        g_free(error);
+        g_error_free(error);
         break;
     }
 

@@ -7,7 +7,7 @@ typedef struct SampleHandlerUserData {
     int pipelineId;
 } SampleHandlerUserData;
 
-extern void goHandlePipelineBuffer(void* buffer, int bufferLen, int pipelineId);
+extern void goHandlePipelineBuffer(void* buffer, int bufferLen, int duration, int pipelineId);
 extern void goHandleBusCall(int pipelineId, int signal, char* message);
 
 GMainLoop* create_mainloop();

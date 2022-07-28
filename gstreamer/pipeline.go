@@ -8,15 +8,19 @@ package gstreamer
 */
 import "C"
 import (
-	"bytes"
 	"errors"
-	"io"
 	"log"
 	"strings"
 	"sync"
 	"unsafe"
 )
 
+type Buffer struct {
+	Bytes    []byte
+	Duration int
+}
+
+type BufferHandler func(Buffer)
 type EOSHandler func()
 type ErrorHandler func(error)
 
@@ -29,30 +33,30 @@ type Pipeline struct {
 	gstElement *C.GstElement
 	gMainLoop  *C.GMainLoop
 	closed     chan struct{}
-	reader     *io.PipeReader
-	writer     *io.PipeWriter
+	bufferCB   BufferHandler
 	eosCB      EOSHandler
 	errCB      ErrorHandler
 }
 
-func NewPipeline(launch string, eosHandler EOSHandler, errorHandler ErrorHandler) (*Pipeline, error) {
+func NewPipeline(launch string) (*Pipeline, error) {
 	launchStrC := C.CString(launch)
 	defer C.free(unsafe.Pointer(launchStrC))
 
 	pipelinesLock.Lock()
 	defer pipelinesLock.Unlock()
 
-	r, w := io.Pipe()
 	p := &Pipeline{
 		launch:     launch,
 		id:         len(pipelines),
 		gstElement: C.create_pipeline(launchStrC),
 		gMainLoop:  C.create_mainloop(),
 		closed:     make(chan struct{}),
-		reader:     r,
-		writer:     w,
-		eosCB:      eosHandler,
-		errCB:      errorHandler,
+		bufferCB: func(Buffer) {
+		},
+		eosCB: func() {
+		},
+		errCB: func(err error) {
+		},
 	}
 	pipelines[p.id] = p
 	if strings.Contains(launch, "appsink") {
@@ -61,8 +65,16 @@ func NewPipeline(launch string, eosHandler EOSHandler, errorHandler ErrorHandler
 	return p, nil
 }
 
-func (p *Pipeline) Read(buf []byte) (int, error) {
-	return p.reader.Read(buf)
+func (p *Pipeline) SetBufferHandler(h BufferHandler) {
+	p.bufferCB = h
+}
+
+func (p *Pipeline) SetEOSHandler(h EOSHandler) {
+	p.eosCB = h
+}
+
+func (p *Pipeline) SetErrorHandler(h ErrorHandler) {
+	p.errCB = h
 }
 
 func (p *Pipeline) Write(buf []byte) (int, error) {
@@ -105,8 +117,6 @@ func (p *Pipeline) Destroy() {
 func (p *Pipeline) Close() error {
 	p.Stop()
 	close(p.closed)
-	p.reader.Close()
-	p.writer.Close()
 	p.Destroy()
 	return nil
 }
@@ -133,11 +143,12 @@ func (p *Pipeline) GetPropertyUint(name string, prop string) uint {
 }
 
 //export goHandlePipelineBuffer
-func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, pipelineID C.int) {
+func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duration C.int, pipelineID C.int) {
 	pipelinesLock.Lock()
 	pipeline, ok := pipelines[int(pipelineID)]
 	pipelinesLock.Unlock()
 	defer C.free(buffer)
+
 	if !ok {
 		log.Printf("no pipeline with ID %v, discarding buffer", int(pipelineID))
 		return
@@ -149,14 +160,10 @@ func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, pipelineID C
 	default:
 	}
 
-	bs := C.GoBytes(buffer, bufferLen)
-	n, err := io.Copy(pipeline.writer, bytes.NewReader(bs))
-	if err != nil {
-		log.Printf("failed to write %v bytes to writer: %v", n, err)
-	}
-	if n != int64(bufferLen) {
-		log.Printf("different buffer size written: %v vs. %v", n, bufferLen)
-	}
+	pipeline.bufferCB(Buffer{
+		Bytes:    C.GoBytes(buffer, bufferLen),
+		Duration: int(duration),
+	})
 }
 
 //export goHandleBusCall
@@ -175,6 +182,5 @@ func goHandleBusCall(pipelineID C.int, signal C.int, message *C.char) {
 	case 1:
 		msg := C.GoString(message)
 		pipeline.errCB(errors.New(msg))
-
 	}
 }
