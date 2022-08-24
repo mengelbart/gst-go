@@ -105,19 +105,11 @@ func (p *Pipeline) Start() {
 	C.start_pipeline(p.gstElement, C.int(p.id))
 }
 
-func (p *Pipeline) Stop() {
-	C.stop_pipeline(p.gstElement)
-	C.stop_mainloop(p.gMainLoop)
-}
-
-func (p *Pipeline) Destroy() {
-	C.destroy_pipeline(p.gstElement)
-}
-
 func (p *Pipeline) Close() error {
-	p.Stop()
 	close(p.closed)
-	p.Destroy()
+	C.stop_pipeline(p.gstElement)
+	C.destroy_pipeline(p.gstElement)
+	C.stop_mainloop(p.gMainLoop)
 	return nil
 }
 
