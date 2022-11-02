@@ -2,6 +2,7 @@ package gstreamer
 
 /*
 #cgo pkg-config: gstreamer-1.0 gstreamer-app-1.0
+#cgo CPPFLAGS: -Wno-deprecated-declarations
 
 #include "gst.h"
 
