@@ -1,5 +1,7 @@
 # Gstreamer Wrapper for Go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/mengelbart/gst-go.svg)](https://pkg.go.dev/github.com/mengelbart/gst-go)
+
 *gst-go* is a very simple CGO wrapper for using Gstreamer in Go.
 
 An example application:
