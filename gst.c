@@ -2,8 +2,15 @@
 #include <gst/app/gstappsrc.h>
 
 GMainLoop* create_mainloop() {
-    GMainLoop* main_loop = NULL;
     return g_main_loop_new(NULL, FALSE);
+}
+
+void init() {
+    gst_init(NULL, NULL);
+}
+
+void deinit() {
+    gst_deinit();
 }
 
 void start_mainloop(GMainLoop* main_loop) {
@@ -65,9 +72,7 @@ static gboolean bus_call(GstBus* bus, GstMessage* msg, gpointer user_data) {
 }
 
 GstElement* create_pipeline(char* pipelineStr) {
-    GError* error = NULL;
-    gst_init(NULL, NULL);
-    return gst_parse_launch(pipelineStr, &error);
+    return gst_parse_launch(pipelineStr, NULL);
 }
 
 void start_pipeline(GstElement* pipeline, int pipelineId) {
@@ -94,19 +99,22 @@ void link_appsink(GstElement* pipeline, int pipelineId) {
 void push_buffer(GstElement* pipeline, void* buffer, int len) {
     GstElement* src = gst_bin_get_by_name(GST_BIN(pipeline), "src");
     if (src != NULL) {
-        gpointer p = g_memdup(buffer, len);
+        gpointer p = g_memdup2(buffer, len);
         GstBuffer* buffer = gst_buffer_new_wrapped(p, len);
         gst_app_src_push_buffer(GST_APP_SRC(src), buffer);
         gst_object_unref(src);
     }
 }
 
-void stop_pipeline(GstElement* pipeline) {
+void send_eos(GstElement* pipeline) {
     gst_element_send_event(pipeline, gst_event_new_eos());
 }
 
-void destroy_pipeline(GstElement* pipeline) {
+void stop_pipeline(GstElement* pipeline) {
     gst_element_set_state(pipeline, GST_STATE_NULL);
+}
+
+void destroy_pipeline(GstElement* pipeline) {
     gst_object_unref(pipeline);
 }
 

@@ -1,4 +1,4 @@
-package gstreamer
+package gst
 
 /*
 #cgo pkg-config: gstreamer-1.0 gstreamer-app-1.0
@@ -16,6 +16,32 @@ import (
 	"unsafe"
 )
 
+func GstInit() {
+	C.init()
+}
+
+func GstDeinit() {
+	C.deinit()
+}
+
+type MainLoop struct {
+	gMainLoop *C.GMainLoop
+}
+
+func NewMainLoop() *MainLoop {
+	return &MainLoop{
+		gMainLoop: C.create_mainloop(),
+	}
+}
+
+func (l *MainLoop) Run() {
+	C.start_mainloop(l.gMainLoop)
+}
+
+func (l *MainLoop) Stop() {
+	C.stop_mainloop(l.gMainLoop)
+}
+
 type Buffer struct {
 	Bytes    []byte
 	Duration int
@@ -32,7 +58,6 @@ type Pipeline struct {
 	launch     string
 	id         int
 	gstElement *C.GstElement
-	gMainLoop  *C.GMainLoop
 	closed     chan struct{}
 	bufferCB   BufferHandler
 	eosCB      EOSHandler
@@ -50,7 +75,6 @@ func NewPipeline(launch string) (*Pipeline, error) {
 		launch:     launch,
 		id:         len(pipelines),
 		gstElement: C.create_pipeline(launchStrC),
-		gMainLoop:  C.create_mainloop(),
 		closed:     make(chan struct{}),
 		bufferCB: func(Buffer) {
 		},
@@ -102,16 +126,23 @@ func (p *Pipeline) linkAppsink() {
 }
 
 func (p *Pipeline) Start() {
-	go C.start_mainloop(p.gMainLoop)
 	C.start_pipeline(p.gstElement, C.int(p.id))
 }
 
+func (p *Pipeline) SendEOS() {
+	C.send_eos(p.gstElement)
+}
+
+// Close implements the io.Closer interface for Pipeline
 func (p *Pipeline) Close() error {
+	p.Stop()
+	return nil
+}
+
+func (p *Pipeline) Stop() {
 	close(p.closed)
 	C.stop_pipeline(p.gstElement)
 	C.destroy_pipeline(p.gstElement)
-	C.stop_mainloop(p.gMainLoop)
-	return nil
 }
 
 func (p *Pipeline) SetPropertyUint(name string, prop string, value uint) {

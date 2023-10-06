@@ -1,4 +1,4 @@
-package gstreamer
+package gst
 
 import (
 	"fmt"
